@@ -5,7 +5,7 @@ Scraper made for test task
 
 ### Pre-requirements
 
-Yarn used as package manager in this project, install it with:
+Yarn is used as a package manager in this project; install it with:
 ```bash
 npm install --global yarn
 ``` 
@@ -17,7 +17,7 @@ npm install --global yarn
   yarn install
 ```
 4. Copy `example.env` (our config) and rename it to `.env`
-5. Change values in `.env` to your actual info (every value have comments on it)
+5. Change the values to your own (each value has comments).
 6. Build the project
 ```bash
 npx tsc
