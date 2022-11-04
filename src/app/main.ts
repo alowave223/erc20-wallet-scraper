@@ -1,39 +1,46 @@
 import { Config } from "src/config";
-import { Express } from 'express';
-import express from 'express';
+import { Server } from "http";
+import express from "express";
 import indexRoute from "./routes/indexRoute";
 import Scraper from "./scraper";
 
 export default class App {
   private config: Config;
-  public webServer: Express;
+  public webServer: Server;
+  public scraper: Scraper;
 
   constructor(config: Config) {
     this.config = config;
   }
 
   private runWebServer() {
-    this.webServer = express();
+    const app = express();
 
-    this.webServer.use(express.json());
-    this.webServer.use(express.urlencoded({ extended: true }));
+    app.use(express.json());
+    app.use(express.urlencoded({ extended: true }));
 
-    this.webServer.get("/", indexRoute);
+    app.get("/", indexRoute);
 
-    this.webServer.listen(this.config.PORT, this.config.ADDRESS, () => {
-      console.log(`Running the express server on ${this.config.ADDRESS}:${this.config.PORT}`);
+    this.webServer = app.listen(this.config.PORT, this.config.ADDRESS, () => {
+      console.log(
+        `Running the express server on ${this.config.ADDRESS}:${this.config.PORT}`
+      );
     });
   }
 
   public async start() {
     console.log("Starting the application...");
     this.runWebServer();
-    
-    const scraper = new Scraper(this.config);
-    scraper.start();
+
+    this.scraper = new Scraper(this.config);
+    await this.scraper.start();
+    console.log("Application has been started!");
   }
 
-  public stop() {
+  public async stop() {
     console.log("Stopping the application!");
+
+    this.webServer.close();
+    await this.scraper.stop();
   }
 }

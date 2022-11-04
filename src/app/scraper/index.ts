@@ -1,17 +1,28 @@
 import { Config } from "src/config";
 import Web3 from "web3";
 import axios, { AxiosInstance } from "axios";
-import { setIntervalAsync } from "set-interval-async";
+import {
+  setIntervalAsync,
+  clearIntervalAsync,
+  SetIntervalAsyncTimer,
+} from "set-interval-async";
 import fs from "fs";
+
+interface Token {
+  id: string;
+  symbol: string;
+  name: string;
+  platforms: {
+    [key: string]: string;
+  };
+}
 
 export default class Scraper {
   private config: Config;
   private web3Instance: Web3;
   private axiosInstance: AxiosInstance;
-  private tokenAddresses: Array<{
-    tokenSymbol: string;
-    tokenAddress: string;
-  }> = [];
+  private tokens: Token[] = [];
+  private timer: SetIntervalAsyncTimer<any>;
 
   private balanceOfABI = [
     {
@@ -39,77 +50,63 @@ export default class Scraper {
     this.config = config;
   }
 
-  private async getAllTokenAddresses(): Promise<
-    { tokenSymbol: string; tokenAddress: string }[]
-  > {
-    const ret = [];
-    const response = await this.axiosInstance.get(
-      "https://raw.githubusercontent.com/viaprotocol/tokenlists/main/tokenlists/ethereum.json"
+  private async getAlltokens(): Promise<Token[]> {
+    const response: Token[] = (
+      await this.axiosInstance.get(
+        "https://api.coingecko.com/api/v3/coins/list",
+        {
+          params: {
+            include_platform: true,
+          },
+        }
+      )
+    ).data;
+
+    return response.filter((token) =>
+      Object.hasOwn(token.platforms, "ethereum")
+        ? token.platforms.ethereum!.length > 0
+        : false
     );
-
-    for (let token of response.data) {
-      ret.push({
-        tokenSymbol: token.symbol,
-        tokenAddress: token.address,
-      });
-    }
-
-    return ret;
   }
 
   private async getBalances(): Promise<
     {
-      symbol: string;
+      token: Token | any;
       balance: string;
     }[]
   > {
-    const promises: Promise<string>[] = [];
     const balances: {
-      symbol: string;
+      token: Token | any;
       balance: string;
     }[] = [];
 
-    for (const token of this.tokenAddresses) {
+    for (let index = 0; index < this.tokens.length; index++) {
       const contract = new this.web3Instance.eth.Contract(
         this.balanceOfABI,
-        token.tokenAddress
+        this.tokens.at(index)!.platforms.ethereum
       );
 
       if (!contract.methods.balanceOf) continue;
 
       try {
-        promises.push(
+        // @ts-ignore
+        const contractResult: string = await contract.methods
           // @ts-ignore
-          contract.methods
-            // @ts-ignore
-            .balanceOf(this.config.WALLET_ADDRESS)
-            .call()
+          .balanceOf(this.config.WALLET_ADDRESS)
+          .call();
+
+        const balance = this.web3Instance.utils.fromWei(
+          BigInt(contractResult),
+          "ether"
         );
+        balances.push({
+          token: this.tokens.at(index),
+          balance: balance,
+        });
       } catch (e) {
-        console.log(`${token.tokenSymbol}: Not Found.`);
+        console.info(`${this.tokens.at(index)!.symbol}: Not Found.`);
       }
     }
-
-    const promiseResults = await Promise.allSettled(promises);
-    for (let index = 0; index < promiseResults.length; index++) {
-      const promiseResult = promiseResults[index];
-      if (promiseResult?.status !== "fulfilled") continue;
-
-      const balance = this.web3Instance.utils.fromWei(
-        BigInt(promiseResult.value),
-        "milliether"
-      );
-      balances.push({
-        symbol: this.tokenAddresses[index]!.tokenSymbol,
-        balance: balance,
-      });
-    }
-
-    const ethereumBalance = await this.web3Instance.eth.getBalance(this.config.WALLET_ADDRESS);
-    balances.push({
-      symbol: "ETH",
-      balance: this.web3Instance.utils.fromWei(ethereumBalance, "milliether")
-    });
 
     return balances;
   }
@@ -122,9 +119,9 @@ export default class Scraper {
 
   public async start(): Promise<void> {
     this.web3Instance = new Web3(
-      `${this.config.TESTNET_ENDPOINT}${
-        this.config.TESTNET_APIKEY != null
-          ? "/" + this.config.TESTNET_APIKEY
+      `${this.config.PROVIDER_ENDPOINT}${
+        this.config.PROVIDER_APIKEY != null
+          ? "/" + this.config.PROVIDER_APIKEY
           : ""
       }`
     );
@@ -145,9 +142,18 @@ export default class Scraper {
       ],
     });
 
-    this.tokenAddresses = await this.getAllTokenAddresses();
-    setIntervalAsync(async () => {
+    this.tokens = await this.getAlltokens();
+    this.timer = setIntervalAsync(async () => {
       await this.job();
     }, this.config.INTERVAL * 100);
+  }
+
+  public async stop() {
+    console.info("Stopping the scraper...");
+
+    await clearIntervalAsync(this.timer);
+    this.tokens = [];
+
+    console.info("Scraper has been stoped.");
   }
 }

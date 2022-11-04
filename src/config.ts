@@ -4,28 +4,19 @@ import dotenv from "dotenv";
 dotenv.config({ path: path.resolve(__dirname, "../.env") });
 
 export interface Config {
-  TESTNET_ENDPOINT: string;
-  TESTNET_APIKEY: string | null;
+  PROVIDER_ENDPOINT: string;
+  PROVIDER_APIKEY: string | null;
   WALLET_ADDRESS: string;
   INTERVAL: number;
-  PORT: number;
+  PORT: number | any;
   ADDRESS: string;
 }
 
-interface ENV {
-  TESTNET_ENDPOINT: string;
-  TESTNET_APIKEY: string | null;
-  WALLET_ADDRESS: string;
-  INTERVAL: string | number;
-  PORT: string | number;
-  ADDRESS: string;
-}
-
-const getConfig = (): ENV => {
+const getConfig = (): Config => {
   return {
-    TESTNET_ENDPOINT: process.env.TESTNET_ENDPOINT,
-    TESTNET_APIKEY: process.env.TESTNET_APIKEY
-      ? process.env.TESTNET_APIKEY
+    PROVIDER_ENDPOINT: process.env.PROVIDER_ENDPOINT,
+    PROVIDER_APIKEY: process.env.PROVIDER_APIKEY
+      ? process.env.PROVIDER_APIKEY
       : null,
     WALLET_ADDRESS: process.env.WALLET_ADDRESS,
     INTERVAL: process.env.INTERVAL
@@ -36,7 +27,7 @@ const getConfig = (): ENV => {
   };
 };
 
-const getSanitzedConfig = (config: ENV): Config => {
+const getSanitzedConfig = (config: Config): Config => {
   for (const [key, value] of Object.entries(config).filter(
     ([_, value]) => value !== null
   )) {
@@ -44,7 +35,7 @@ const getSanitzedConfig = (config: ENV): Config => {
       throw new SyntaxError(`Missing key ${key} in .env`);
     }
   }
-  return config as Config;
+  return config;
 };
 
 const config = getSanitzedConfig(getConfig());
